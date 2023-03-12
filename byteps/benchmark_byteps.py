@@ -11,6 +11,9 @@ import timeit
 import numpy as np
 import os, sys
 
+from ptflops.utils import flops_to_string, params_to_string
+from ptflops.pytorch_engine import add_flops_counting_methods, CUSTOM_MODULES_MAPPING
+
 # Benchmark settings
 parser = argparse.ArgumentParser(description='PyTorch Synthetic Benchmark',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -35,6 +38,8 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--profiler', action='store_true', default=False,
                     help='disables profiler')
+parser.add_argument('--flops', action='store_true', default=False,
+                    help='enable flops profiler')
 parser.add_argument('--partition', type=int, default=None,
                     help='partition size')
 
@@ -52,6 +57,9 @@ cudnn.benchmark = True
 
 # Set up standard model.
 model = getattr(models, args.model)(num_classes=args.num_classes)
+if args.flops:
+    model = add_flops_counting_methods(model)
+
 
 if args.cuda:
     # Move model to GPU.
@@ -77,7 +85,8 @@ for _ in range(100):
     data = torch.rand(args.batch_size, 3, 224, 224)
     target = torch.LongTensor(args.batch_size).random_() % 1000
     if args.cuda:
-        data, target = data.cuda(), target.cuda()
+        data = data.cuda()
+        target = target.cuda()
     datasets.append(data)
 data_index = 0
 
@@ -112,19 +121,34 @@ timeit.timeit(benchmark_step, number=args.num_warmup_batches)
 # Benchmark
 log('Running benchmark...')
 img_secs = []
+time_sum = 0
 enable_profiling = args.profiler & (bps.rank() == 0)
 
-with torch.autograd.profiler.profile(enable_profiling, True) as prof:
+
+with torch.autograd.profiler.profile(enabled=enable_profiling, use_cuda=True) as prof:
+    if args.flops:
+        model.start_flops_count(ost=sys.stdout, verbose=False, ignore_list=[])
+    
     for x in range(args.num_iters):
         time = timeit.timeit(benchmark_step, number=args.num_batches_per_iter)
+        time_sum += time
+
         img_sec = args.batch_size * args.num_batches_per_iter / time
         log('Iter #%d: %.1f img/sec per %s' % (x, img_sec, device))
         img_secs.append(img_sec)
 
+    if args.flops:
+        flops_count, params_count = model.compute_average_flops_cost()
+        flops_count *= model.__batch_counter__
+        model.stop_flops_count()
 
+if args.flops:
+    log("Flops: {} GFlops\n".format(flops_count / (1000 ** 3) / time_sum))
+    
 # Results
 img_sec_mean = np.mean(img_secs)
 img_sec_conf = 1.96 * np.std(img_secs)
+log("Avg Time: {}\n".format(time_sum / args.num_iters))
 log('Img/sec per %s: %.1f +-%.1f' % (device, img_sec_mean, img_sec_conf))
 log('Total img/sec on %d %s(s): %.1f +-%.1f' %
     (bps.size(), device, bps.size() * img_sec_mean, bps.size() * img_sec_conf))

@@ -15,3 +15,14 @@ runs
 *.npy
 bk/
 *.npy*
+
+# byteps data
+byteps/core
+byteps/nccl_profiles
+byteps/nsys_output
+byteps/nsys_output_cross_docker
+byteps/traces_1
+byteps/traces_2
+
+# results
+results/
