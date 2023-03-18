@@ -1,14 +1,3 @@
-# now you are in docker environment
-# export NVIDIA_VISIBLE_DEVICES=0,1,2,3  # gpus list
-export DMLC_WORKER_ID=0 # your worker id
-export DMLC_NUM_WORKER=1 # one worker
-export DMLC_ROLE=worker
-
-# the following value does not matter for non-distributed jobs
-export DMLC_NUM_SERVER=1
-export DMLC_PS_ROOT_URI=127.0.0.1
-export DMLC_PS_ROOT_PORT=1234
-
 if [[ -z "${SUFFIX}" ]]; then
     echo "ERROR:"
     echo "  You must give me SUFFIX environment variable."
@@ -19,6 +8,12 @@ python -c "import ptflops" > /dev/null 2> /dev/null
 retVal=$?
 if [ $retVal -ne 0 ]; then
     pip install ptflops
+fi
+
+python -c "import torchgpipe" > /dev/null 2> /dev/null
+retVal=$?
+if [ $retVal -ne 0 ]; then
+    pip install torchgpipe
 fi
 
 export MODEL_NAME=resnet50_${SUFFIX}
@@ -34,8 +29,9 @@ rm -f ./nccl_profiles/${MODEL_NAME}/* || true
 
 LD_PRELOAD=/usr/local/ComScribe/nccl/build/lib/libnccl.so \
     nsys profile --wait primary --force-overwrite true -o ./nsys_output/${MODEL_NAME} \
-    bpslaunch python3 ./imagenet_benchmark.py --model resnet50 --num-iters 10 ${PROFILE_ARGS} \
-    > ./logs/${MODEL_NAME}.log 2> /dev/null
+    python3 ./imagenet_benchmark.py --model resnet50 --num-batches-per-iter 10 --num-iter 10 \
+    --batch-size ${BATCH_SIZE} --partitions ${PARTITIONS} --chunks ${CHUNKS} ${PROFILE_ARGS} \
+    1> ./logs/${MODEL_NAME}.log 2> ./logs/${MODEL_NAME}_ERROR.log
 
 if test -n "$(find ./ -maxdepth 1 -name 'comscribe_*_*.csv' -print -quit)"
 then

@@ -15,6 +15,7 @@ def main(csv_file, name = ""):
 
     data_read = pd.read_csv(csv_file)
     data_read = data_read[data_read['Name'].isin(['[CUDA memcpy HtoD]', '[CUDA memcpy DtoH]'])][['Duration (ns)', 'Bytes (MB)', 'Throughput (MBps)']]
+    # data_read = data_read[data_read['Name'].isin(['[CUDA memcpy HtoD]'])][['Duration (ns)', 'Bytes (MB)', 'Throughput (MBps)']]
     data_read['Throughput (MBps)'] = data_read['Throughput (MBps)'] / 1024
 
     i = 0

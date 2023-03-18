@@ -1,0 +1,6 @@
+[submodule "3rdparty/torchgpipe"]
+	path = 3rdparty/torchgpipe
+	url = https://github.com/kakaobrain/torchgpipe.git
+[submodule "3rdparty/ptflops"]
+	path = 3rdparty/ptflops
+	url = https://github.com/sovrasov/flops-counter.pytorch

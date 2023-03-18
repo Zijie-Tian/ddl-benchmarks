@@ -10,6 +10,13 @@ import horovod.torch as hvd
 import timeit
 import numpy as np
 
+import os
+import sys
+
+from ptflops.utils import flops_to_string, params_to_string
+from ptflops.pytorch_engine import add_flops_counting_methods, CUSTOM_MODULES_MAPPING
+
+
 # Benchmark settings
 parser = argparse.ArgumentParser(description='PyTorch Synthetic Benchmark',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -30,7 +37,8 @@ parser.add_argument('--num-iters', type=int, default=10,
 
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
-
+parser.add_argument('--flops', action='store_true', default=False,
+                    help='enable flops profiler')
 parser.add_argument('--use-adasum', action='store_true', default=False,
                     help='use adasum algorithm to do reduction')
 
@@ -47,6 +55,8 @@ cudnn.benchmark = True
 
 # Set up standard model.
 model = getattr(models, args.model)()
+if args.flops:
+    model = add_flops_counting_methods(model)
 
 # By default, Adasum doesn't need scaling up learning rate.
 lr_scaler = hvd.size() if not args.use_adasum else 1
@@ -106,16 +116,30 @@ timeit.timeit(benchmark_step, number=args.num_warmup_batches)
 
 # Benchmark
 log('Running benchmark...')
+time_sum = 0
 img_secs = []
+if args.flops:
+    model.start_flops_count(ost=sys.stdout, verbose=False, ignore_list=[])
+
 for x in range(args.num_iters):
     time = timeit.timeit(benchmark_step, number=args.num_batches_per_iter)
+    time_sum += time
     img_sec = args.batch_size * args.num_batches_per_iter / time
     log('Iter #%d: %.1f img/sec per %s' % (x, img_sec, device))
     img_secs.append(img_sec)
 
+if args.flops:
+    flops_count, params_count = model.compute_average_flops_cost()
+    flops_count *= model.__batch_counter__
+    model.stop_flops_count()
+
+if args.flops:
+    log("Flops: {} GFlops\n".format(flops_count / (1000 ** 3) / time_sum))
+
 # Results
 img_sec_mean = np.mean(img_secs)
 img_sec_conf = 1.96 * np.std(img_secs)
+log("Avg Time: {} sec\n".format(time_sum / args.num_iters))
 log('Img/sec per %s: %.1f +-%.1f' % (device, img_sec_mean, img_sec_conf))
 log('Total img/sec on %d %s(s): %.1f +-%.1f' %
     (hvd.size(), device, hvd.size() * img_sec_mean, hvd.size() * img_sec_conf))

@@ -24,5 +24,31 @@ byteps/nsys_output_cross_docker
 byteps/traces_1
 byteps/traces_2
 
+# horovod data
+horovod/core
+horovod/nccl_profiles
+horovod/nsys_output
+horovod/logs
+
+# pytorch data
+pytorch/core
+pytorch/nccl_profiles
+pytorch/nsys_output
+pytorch/logs
+
+# gpipe data
+gpipe/core
+gpipe/nccl_profiles
+gpipe/nsys_output
+gpipe/logs
+gpipe/resnet
+
+# tools data
+tools/core
+tools/nccl_profiles
+tools/nsys_output
+tools/logs
+tools/*.csv
+
 # results
 results/
