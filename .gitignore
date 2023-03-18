@@ -41,7 +41,6 @@ gpipe/core
 gpipe/nccl_profiles
 gpipe/nsys_output
 gpipe/logs
-gpipe/resnet
 
 # tools data
 tools/core
